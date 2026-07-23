@@ -29,12 +29,12 @@ void parse_config(char **argv, t_config *config)
     config->number_of_compiles_required = ft_atoi(argv[6]);
     config->dongle_cooldown = ft_atoi(argv[7]);
     if (strcmp(argv[8], "fifo") == 0)
-        config->scheduler = SCHED_FIFO;
+        config->scheduler = SCHEDULER_FIFO;
     else
-        config->scheduler = SCHED_EDF;
+        config->scheduler = SCHEDULER_EDF;
 }
 
-int valid_parametrs(t_config *config)
+int valid_parameters(t_config *config)
 {
     if (config->number_of_coders < 1)
         return 0;

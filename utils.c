@@ -5,8 +5,6 @@ void	print_error(void)
 	write(2, "Error\n", 6);
 }
 
-#include "codexion.h"
-
 int	only_digits(char *str)
 {
 	int	i;
@@ -23,7 +21,7 @@ int	only_digits(char *str)
 	return (1);
 }
 
-int ft_atoi(const char *str)
+int ft_atoi(char *str)
 {
     int result = 0;
     int sign = 1;
@@ -48,4 +46,14 @@ int ft_atoi(const char *str)
     }
 
     return result * sign;
+}
+
+
+long long	get_current_time(void)
+{
+	struct timeval	time;
+
+	if (gettimeofday(&time, NULL) != 0)
+		return (0);
+	return ((long long)time.tv_sec * 1000 + time.tv_usec / 1000);
 }

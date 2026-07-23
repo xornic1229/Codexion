@@ -1,15 +1,17 @@
 #ifndef CODEXION_H
 # define CODEXION_H
 
+# include <pthread.h>
 # include <unistd.h>
 # include <stdlib.h>
 # include <string.h>
 # include <limits.h>
-# include <stdio.h>
+# include <sys/time.h>
+
 typedef enum e_scheduler
 {
-	SCHED_FIFO,
-	SCHED_EDF
+	SCHEDULER_FIFO,
+	SCHEDULER_EDF
 }	t_scheduler;
 
 typedef struct s_config
@@ -24,11 +26,49 @@ typedef struct s_config
 	t_scheduler	scheduler;
 }	t_config;
 
+typedef struct s_simulation	t_simulation;
+
+typedef struct s_dongle
+{
+	int				id;
+	int				available;
+	long long		last_release_time;
+	pthread_mutex_t	mutex;
+}	t_dongle;
+
+typedef struct s_coder
+{
+	int				id;
+	int				compiles_done;
+	long long		last_compile_time;
+	pthread_t		thread;
+	t_dongle		*left_dongle;
+	t_dongle		*right_dongle;
+	t_simulation	*sim;
+}	t_coder;
+
+struct s_simulation
+{
+	t_config		config;
+	t_coder			*coders;
+	t_dongle		*dongles;
+	pthread_t		monitor_thread;
+	pthread_mutex_t	print_mutex;
+	pthread_mutex_t	state_mutex;
+	long long		start_time;
+	int				finished;
+};
+
 int		parse_args(int argc, char **argv, t_config *config);
-int     only_digits(char *str);
-void	print_error(void);
 void	parse_config(char **argv, t_config *config);
-int		valid_parametrs(t_config *config);
-int		ft_atoi(const char *str);
+int		valid_parameters(t_config *config);
+
+int		init_sim(t_simulation *sim, t_config *config);
+void	free_sim(t_simulation *sim);
+
+void	print_error(void);
+int		only_digits(char *str);
+int		ft_atoi(char *str);
+long long	get_current_time(void);
 
 #endif

@@ -78,6 +78,6 @@ long long	elapsed_ms(t_simulation *sim);
 void	precise_sleep(t_simulation *sim, long long time_ms);
 int		is_finished(t_simulation *sim);
 void	set_finished(t_simulation *sim);
-void	safe_log(t_coder *coder, char *msg);
+void	safe_log(t_coder *coder, const char *msg);
 
 #endif

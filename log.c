@@ -22,7 +22,7 @@ void	set_finished(t_simulation *sim)
 	pthread_mutex_unlock(&sim->state_mutex);
 }
 
-void	safe_log(t_coder *coder, char *msg)
+void	safe_log(t_coder *coder, const char *msg)
 {
 	t_simulation	*sim;
 

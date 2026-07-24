@@ -12,14 +12,32 @@ static void	join_created_coders(t_simulation *sim, int created)
 	}
 }
 
+static int	dongle_ready(t_simulation *sim, t_dongle *dongle, long long now)
+{
+	if (!sim || !dongle)
+		return (0);
+	if (!dongle->available)
+		return (0);
+	if (sim->config.dongle_cooldown == 0)
+		return (1);
+	if (now - dongle->last_release_time >= sim->config.dongle_cooldown)
+		return (1);
+	return (0);
+}
+
 static int	take_dongle(t_coder *coder, t_dongle *dongle)
 {
+	long long	now;
+	t_simulation	*sim;
+
 	if (!coder || !dongle || !coder->sim)
 		return (1);
-	while (!is_finished(coder->sim))
+	sim = coder->sim;
+	while (!is_finished(sim))
 	{
 		pthread_mutex_lock(&dongle->mutex);
-		if (dongle->available)
+		now = get_time_ms();
+		if (dongle_ready(sim, dongle, now))
 		{
 			dongle->available = 0;
 			pthread_mutex_unlock(&dongle->mutex);
@@ -168,8 +186,6 @@ void	*coder_routine(void *arg)
 		precise_sleep(coder->sim, coder->sim->config.time_to_compile);
 		release_two_dongles(coder);
 		increase_compile_count(coder);
-		if (all_coders_done(coder->sim))
-			break ;
 		if (is_finished(coder->sim))
 			break ;
 		safe_log(coder, "is debugging");

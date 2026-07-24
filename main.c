@@ -21,6 +21,13 @@ int	main(int argc, char **argv)
 		print_error();
 		return (1);
 	}
+	if (start_simulation(&sim) != 0)
+	{
+		print_error();
+		free_sim(&sim);
+		return (1);
+	}
+	join_threads(&sim);
 	free_sim(&sim);
 	return (0);
 }

@@ -65,10 +65,19 @@ int		valid_parameters(t_config *config);
 
 int		init_sim(t_simulation *sim, t_config *config);
 void	free_sim(t_simulation *sim);
+int		start_simulation(t_simulation *sim);
+void	join_threads(t_simulation *sim);
+void	*coder_routine(void *arg);
+void	*monitor_routine(void *arg);
 
 void	print_error(void);
 int		only_digits(char *str);
 int		ft_atoi(char *str);
-long long	get_current_time(void);
+long long	get_time_ms(void);
+long long	elapsed_ms(t_simulation *sim);
+void	precise_sleep(t_simulation *sim, long long time_ms);
+int		is_finished(t_simulation *sim);
+void	set_finished(t_simulation *sim);
+void	safe_log(t_coder *coder, char *msg);
 
 #endif

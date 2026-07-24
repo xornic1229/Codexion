@@ -83,7 +83,7 @@ static void	init_coders(t_simulation *sim)
 	{
 		sim->coders[i].id = i + 1;
 		sim->coders[i].compiles_done = 0;
-		sim->coders[i].last_compile_time = 0;
+		sim->coders[i].last_compile_time = sim->start_time;
 		sim->coders[i].thread = 0;
 		sim->coders[i].left_dongle = &sim->dongles[i];
 		if (n == 1)
@@ -106,7 +106,7 @@ int	init_sim(t_simulation *sim, t_config *config)
 	memset(sim, 0, sizeof(t_simulation));
 	sim->config = *config;
 	sim->finished = 0;
-	sim->start_time = get_current_time();
+	sim->start_time = get_time_ms();
 	if (alloc_sim_arrays(sim) != 0)
 		return (1);
 	if (init_shared_mutexes(sim, &print_ready, &state_ready) != 0)

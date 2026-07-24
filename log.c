@@ -31,10 +31,10 @@ void	safe_log(t_coder *coder, const char *msg)
 	sim = coder->sim;
 	if (!sim)
 		return ;
-	if (strcmp(msg, "burned out") != 0 && is_finished(sim))
+	if (strcmp(msg, MSG_BURNED) != 0 && is_finished(sim))
 		return ;
 	pthread_mutex_lock(&sim->print_mutex);
-	if (strcmp(msg, "burned out") != 0 && is_finished(sim))
+	if (strcmp(msg, MSG_BURNED) != 0 && is_finished(sim))
 	{
 		pthread_mutex_unlock(&sim->print_mutex);
 		return ;

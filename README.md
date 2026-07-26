@@ -103,6 +103,7 @@ Invalid cases include:
 ```txt
 .
 ├── Makefile
+├── README.md
 ├── codexion.c
 ├── codexion.h
 └── src

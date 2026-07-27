@@ -22,7 +22,8 @@ SRCS = codexion.c \
 	src/cycle.c \
 	src/routine.c \
 	src/monitor.c \
-	src/threads.c
+	src/threads.c \
+	src/heap_sift.c 
 
 OBJS = $(SRCS:.c=.o)
 

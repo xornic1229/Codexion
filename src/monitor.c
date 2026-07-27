@@ -1,10 +1,22 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   monitor.c                                          :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: jaialons <jaialons@student.42madrid.com    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/07/27 16:21:41 by jaialons          #+#    #+#             */
+/*   Updated: 2026/07/27 16:21:45 by jaialons         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "codexion.h"
 
 static int	check_burnout(t_simulation *sim)
 {
-	int				 i;
-	long long		current_time;
-	long long		last_compile_time;
+	int			i;
+	long long	current_time;
+	long long	last_compile_time;
 
 	i = 0;
 	current_time = get_time_ms();

@@ -1,15 +1,30 @@
 #include "codexion.h"
 
+static int	fifo_higher(t_request *a, t_request *b)
+{
+	if (a->request_time < b->request_time)
+		return (1);
+	if (a->request_time > b->request_time)
+		return (0);
+	return (a->coder->id < b->coder->id);
+}
+
+static int	edf_higher(t_request *a, t_request *b)
+{
+	if (a->deadline < b->deadline)
+		return (1);
+	if (a->deadline > b->deadline)
+		return (0);
+	return (a->coder->id > b->coder->id);
+}
+
 int	heap_higher(t_dongle *dongle, t_request *a, t_request *b)
 {
-	t_scheduler	scheduler;
-
 	if (!dongle || !a || !b)
 		return (0);
-	scheduler = a->coder->sim->config.scheduler;
-	if (scheduler == SCHEDULER_EDF && a->deadline != b->deadline)
-		return (a->deadline < b->deadline);
-	return (a->request_time < b->request_time);
+	if (a->coder->sim->config.scheduler == SCHEDULER_EDF)
+		return (edf_higher(a, b));
+	return (fifo_higher(a, b));
 }
 
 void	heap_swap(t_request **a, t_request **b)

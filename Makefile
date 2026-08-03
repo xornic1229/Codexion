@@ -1,46 +1,26 @@
-NAME = codexion
+.PHONY: install run debug clean lint lint-strict
 
-CC = cc
-CFLAGS = -Wall -Wextra -Werror -pthread
+install:
+	uv sync
 
-INCLUDES = -I.
+run:
+	uv run python -m src
 
-SRCS = codexion.c \
-	src/parser.c \
-	src/utils.c \
-	src/init.c \
-	src/init_objects.c \
-	src/destroy.c \
-	src/time.c \
-	src/log.c \
-	src/coder_state.c \
-	src/request.c \
-	src/heap_order.c \
-	src/heap.c \
-	src/dongle.c \
-	src/dongle_release.c \
-	src/cycle.c \
-	src/routine.c \
-	src/monitor.c \
-	src/threads.c \
-	src/heap_sift.c 
-
-OBJS = $(SRCS:.c=.o)
-
-all: $(NAME)
-
-$(NAME): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $(NAME)
-
-%.o: %.c codexion.h
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+debug:
+	uv run python -m pdb -m src
 
 clean:
-	rm -f $(OBJS)
+	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+	find . -type d -name ".mypy_cache" -prune -exec rm -rf {} +
+	find . -type d -name ".pytest_cache" -prune -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
 
-fclean: clean
-	rm -f $(NAME)
+lint:
+	uv run flake8 src/
+	uv run mypy src/ --warn-return-any --warn-unused-ignores \
+		--ignore-missing-imports --disallow-untyped-defs \
+		--check-untyped-defs
 
-re: fclean all
-
-.PHONY: all clean fclean re
+lint-strict:
+	uv run flake8 src/
+	uv run mypy . --strict

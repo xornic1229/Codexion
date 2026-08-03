@@ -1,0 +1,42 @@
+[project]
+name = "call-me-maybe"
+version = "1.0.0"
+description = "Function calling with schema-guided constrained decoding"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "llm-sdk",
+    "numpy>=1.24,<3",
+    "pydantic>=2.0,<3",
+]
+
+[dependency-groups]
+dev = [
+    "flake8>=7.0,<8",
+    "mypy>=1.0,<2",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+llm-sdk = { path = "llm_sdk", editable = true }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.mypy]
+exclude = "^(llm_sdk|data)/"
+
+[[tool.mypy.overrides]]
+module = ["llm_sdk", "llm_sdk.*"]
+ignore_missing_imports = true
+follow_untyped_imports = false

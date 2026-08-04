@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 import json
 import re
 from typing import Any, Callable
@@ -73,6 +74,10 @@ class ArgumentGenerator(BaseModel):
         parameters: dict[str, JsonValue] = {}
         total_parameters = len(function.parameters)
 
+        numeric_literals = self._extract_numeric_literals(
+            prompt.prompt,
+        )
+
         for index, (name, specification) in enumerate(
             function.parameters.items()
         ):
@@ -83,6 +88,18 @@ class ArgumentGenerator(BaseModel):
                 context,
                 specification,
             )
+
+            if (
+                specification.type in {"number", "integer"}
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)
+            ):
+                value = self._repair_grounded_numeric(
+                    value,
+                    specification.type,
+                    numeric_literals,
+                )
+                raw_value = str(value)
 
             if specification.type == "string" and isinstance(value, str):
                 value = self._repair_grounded_string(
@@ -224,6 +241,58 @@ class ArgumentGenerator(BaseModel):
         return is_prefix(current_text + token_text)
 
     @staticmethod
+    def _extract_numeric_literals(user_prompt: str) -> list[str]:
+        """Extract signed JSON-like numbers in their original order."""
+        pattern = re.compile(
+            r"(?<![\w.])"
+            r"[+-]?"
+            r"(?:"
+            r"(?:\d+(?:\.\d*)?)"
+            r"|"
+            r"(?:\.\d+)"
+            r")"
+            r"(?:[eE][+-]?\d+)?"
+        )
+
+        return [
+            match.group(0)
+            for match in pattern.finditer(user_prompt)
+        ]
+
+    @staticmethod
+    def _repair_grounded_numeric(
+        generated_value: int | float,
+        parameter_type: str,
+        available_literals: list[str],
+    ) -> int | float:
+        """Restore a grounded sign without replacing the numeric magnitude."""
+        try:
+            generated_decimal = Decimal(str(generated_value))
+        except InvalidOperation:
+            return generated_value
+
+        for index, literal in enumerate(available_literals):
+            try:
+                literal_decimal = Decimal(literal)
+            except InvalidOperation:
+                continue
+
+            if abs(literal_decimal) != abs(generated_decimal):
+                continue
+
+            available_literals.pop(index)
+
+            if parameter_type == "integer":
+                if literal_decimal != literal_decimal.to_integral_value():
+                    return generated_value
+
+                return int(literal_decimal)
+
+            return float(literal_decimal)
+
+        return generated_value
+
+    @staticmethod
     def _has_regex_schema(function: FunctionDefinition) -> bool:
         """Return whether the function has standard regex arguments."""
         required = {
@@ -276,14 +345,18 @@ class ArgumentGenerator(BaseModel):
         replacement_aliases = {
             "asterisk": "*",
             "asterisks": "*",
+            "*": "*",
             "hash": "#",
             "hashes": "#",
+            "#": "#",
             "underscore": "_",
             "underscores": "_",
+            "_": "_",
             "dash": "-",
             "dashes": "-",
             "hyphen": "-",
             "hyphens": "-",
+            "-": "-",
         }
 
         replacement_key = replacement_value.strip().casefold()

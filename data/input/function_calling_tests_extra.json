@@ -1,0 +1,41 @@
+[
+  {
+    "prompt": "Add -12.5 and 7.25"
+  },
+  {
+    "prompt": "What is the sum of 1000000 and -500000?"
+  },
+  {
+    "prompt": "Greet Jaime"
+  },
+  {
+    "prompt": "Greet José María"
+  },
+  {
+    "prompt": "Reverse the string 'Hello, world!'"
+  },
+  {
+    "prompt": "Reverse the string 'race car'"
+  },
+  {
+    "prompt": "Calculate the square root of 2.25"
+  },
+  {
+    "prompt": "Find the square root of 1000000"
+  },
+  {
+    "prompt": "Replace every number in 'Room 12 has 3 chairs' with X"
+  },
+  {
+    "prompt": "Replace all vowels in 'Artificial Intelligence' with hashes"
+  },
+  {
+    "prompt": "Replace all whitespace in 'hello   world' with underscores"
+  },
+  {
+    "prompt": "Substitute the word 'blue' with 'red' in 'blue sky and blue sea'"
+  },
+  {
+    "prompt": "Replace 'cat' with 'dog' in 'concatenate cat category'"
+  }
+]

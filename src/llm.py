@@ -21,7 +21,7 @@ class LLMClient(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Create Small_LLM_Model after Pydantic initialisation."""
         try:
-            from llm_sdk import Small_LLM_Model
+            from llm_sdk import Small_LLM_Model  # type: ignore[attr-defined]
         except ImportError as exc:
             raise ModelError(
                 "llm_sdk is unavailable; run 'make install' from the "

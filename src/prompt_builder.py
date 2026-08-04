@@ -34,32 +34,53 @@ class PromptBuilder(BaseModel):
         function: FunctionDefinition,
     ) -> str:
         """Ask the model to extract, not execute, typed arguments."""
-        examples = (
-            self._regex_examples()
+        regex_guidance = (
+            self._regex_guidance()
             if "regex" in function.parameters
             else ""
         )
+
         return (
             "Extract the raw arguments required by this function.\n"
             "Do not execute or calculate the function result.\n"
-            "Preserve user-provided strings and spelling.\n\n"
+            "Preserve user-provided strings and spelling exactly.\n"
+            "JSON strings use double quotes. Apostrophes are ordinary "
+            "characters: never add a backslash before an apostrophe.\n\n"
             f"Function: {function.prototype()}\n"
             f"Description: {function.description}\n\n"
-            f"{examples}"
+            f"{regex_guidance}"
             f"User request: {prompt.prompt!r}\n"
             "Parameters JSON:\n"
         )
 
     @staticmethod
-    def _regex_examples() -> str:
-        """Provide generic, non-test-specific regex extraction examples."""
+    def _regex_guidance() -> str:
+        """Add generic semantic guidance for regex substitutions."""
         return (
-            "Example request: 'Replace all digits in A1 B22 with X'\n"
+            "Regex-substitution rules:\n"
+            "- source_string: copy the exact text to transform.\n"
+            "- regex: return one reusable regular-expression pattern; "
+            "never list only the matches found in source_string.\n"
+            "- replacement: return the literal replacement text or "
+            "character. Named symbols mean their character, for example "
+            "asterisks -> *, hashes -> #, underscores -> _, dashes -> -.\n"
+            "- Standard general patterns: numbers or digits -> \\d+; "
+            "vowels -> [aeiouAEIOU]; spaces or whitespace -> \\s+.\n\n"
+            "Example request: \"Replace every number in 'Room 7, "
+            "floor 12' with VALUE\"\n"
             "Example parameters: "
-            "{\"source_string\": \"A1 B22\", "
-            "\"regex\": \"\\\\d+\", \"replacement\": \"X\"}\n"
-            "Example request: 'Replace red with blue in red car'\n"
+            "{\"source_string\": \"Room 7, floor 12\", "
+            "\"regex\": \"\\\\d+\", "
+            "\"replacement\": \"VALUE\"}\n"
+            "Example request: \"Change all vowels in 'Education' "
+            "to hashes\"\n"
+            "Example parameters: "
+            "{\"source_string\": \"Education\", "
+            "\"regex\": \"[aeiouAEIOU]\", "
+            "\"replacement\": \"#\"}\n"
+            "Example request: \"Replace red with blue in 'red car'\"\n"
             "Example parameters: "
             "{\"source_string\": \"red car\", "
-            "\"regex\": \"red\", \"replacement\": \"blue\"}\n\n"
+            "\"regex\": \"red\", "
+            "\"replacement\": \"blue\"}\n\n"
         )

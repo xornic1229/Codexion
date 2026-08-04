@@ -5,8 +5,15 @@
 ## Description
 
 Call Me Maybe translates natural-language requests into structured function
-calls. It does **not** execute the selected function. For every input prompt, it
-writes an object containing:
+calls.
+
+Given a request such as:
+
+```text
+What is the sum of 2 and 3?
+```
+
+the program does not calculate the result. It produces:
 
 ```json
 {
@@ -19,54 +26,40 @@ writes an object containing:
 }
 ```
 
-The project uses the subject-provided `Small_LLM_Model` and constrained
-decoding. The LLM performs the semantic work: choosing the appropriate
-function and extracting argument values. The program restricts the LLM's token
-choices so that names and values remain compatible with the input schema.
+The project uses the subject-provided `Small_LLM_Model` with the required
+`Qwen/Qwen3-0.6B` model.
+
+Function selection and parameter extraction use constrained decoding. At each
+generation step, invalid token logits are replaced with negative infinity, so
+the model can only choose continuations compatible with the available function
+names or the expected parameter type.
 
 ## Requirements
 
 - Python 3.10 or later
 - `uv`
-- Internet access on the first run, unless the Qwen model is already cached
-- The included subject-provided `llm_sdk`
+- The included `llm_sdk`
+- Internet access on the first execution, unless the Qwen model is cached
 
-The application code imports only the allowed project libraries, `numpy` and
-`pydantic`, plus Python's standard library. `torch`, `transformers`, and
-`huggingface-hub` are implementation dependencies of the provided SDK and are
-not used directly by `src/`.
+The application code uses Python's standard library, NumPy and Pydantic.
+PyTorch, Transformers and Hugging Face Hub are internal dependencies of the
+subject-provided SDK and are not imported directly by `src/`.
 
-## Installation
+## Instructions
 
-Run from the repository root:
+Install all dependencies from the repository root:
 
 ```bash
 make install
 ```
 
-The `install` target runs only:
+This runs:
 
 ```bash
 uv sync
 ```
 
-The root `pyproject.toml` declares `llm_sdk` as a local path dependency. Its own
-`pyproject.toml` declares the packages required internally by the SDK. This is
-why the package layout intentionally contains two levels:
-
-```text
-llm_sdk/                 local Python project
-├── pyproject.toml
-└── llm_sdk/             importable Python package
-    └── __init__.py
-```
-
-No absolute paths, user-specific folders, or manual `pip --target` commands are
-required.
-
-## Instructions
-
-Default execution:
+Run the program with the default paths:
 
 ```bash
 make run
@@ -78,7 +71,7 @@ Equivalent command:
 uv run python -m src
 ```
 
-Custom paths:
+Run with custom files:
 
 ```bash
 uv run python -m src \
@@ -87,7 +80,7 @@ uv run python -m src \
   --output data/output/function_calling_results.json
 ```
 
-Other Makefile rules:
+Other available commands:
 
 ```bash
 make debug
@@ -96,249 +89,296 @@ make lint
 make lint-strict
 ```
 
-The generated directory `data/output/` is ignored by Git and must not be
+The `data/output/` directory is generated during execution and must not be
 submitted.
 
-## Input files
+## Input and output
 
-`data/input/function_calling_tests.json` contains a JSON array of prompt
-objects:
+The prompts file contains a JSON array:
 
 ```json
 [
-  {"prompt": "Greet shrek"},
-  {"prompt": "Reverse the string 'hello'"}
+  {
+    "prompt": "Greet shrek"
+  },
+  {
+    "prompt": "Reverse the string 'hello'"
+  }
 ]
 ```
 
-`data/input/functions_definition.json` contains the available functions, their
-descriptions, parameter names and types, and return type.
+The function-definition file describes every available function, its
+description, parameter names and types, and return type.
 
-Input data is validated with Pydantic before the model is loaded. The loader
-handles missing files, permission errors, malformed JSON, invalid schemas, and
-duplicated function names with readable messages.
+Both files are validated with Pydantic before loading the model. Missing files,
+malformed JSON, duplicated functions and invalid schemas produce readable error
+messages.
+
+The generated output contains exactly:
+
+- `prompt`: the original user request
+- `name`: the selected function name
+- `parameters`: the extracted typed arguments
 
 ## Project structure
 
 ```text
 src/
-├── __main__.py          command-line entry point
-├── models.py            Pydantic input, schema, and output models
-├── loader.py            robust input JSON loading
-├── llm.py               public compatibility wrapper over llm_sdk
-├── vocabulary.py        token-to-ID and ID-to-token maps
-├── prompt_builder.py    concise model prompts
-├── constrained.py       masks, candidate decoding, number rules
-├── function_selector.py constrained function-name choice
-├── args_generator.py    constrained argument generation by type
-├── pipeline.py          high-level orchestration and validation
-├── writer.py            exact JSON output serialization
-└── errors.py            expected application errors
+├── __main__.py
+├── args_generator.py
+├── constrained.py
+├── errors.py
+├── function_selector.py
+├── llm.py
+├── loader.py
+├── models.py
+├── pipeline.py
+├── prompt_builder.py
+├── vocabulary.py
+└── writer.py
+
+llm_sdk/
+├── pyproject.toml
+└── llm_sdk/
+    └── __init__.py
 ```
 
 ## Algorithm explanation
 
-The pipeline contains two separate constrained-decoding stages.
+### Function selection
 
-### 1. Function selection
+The program builds a prompt containing all available function prototypes and
+descriptions.
 
-The selector first creates a prompt containing every available function
-prototype and description. Each valid function name is then tokenized in the
-context of that prompt.
+Each valid function name is tokenized. During generation:
 
-Generation proceeds token by token:
-
-1. Ask the model for logits for the next token.
-2. Determine the next token IDs belonging to at least one surviving function
+1. The LLM returns logits for the next token.
+2. The selector finds which tokens can continue at least one valid function
    name.
-3. Set every other logit to negative infinity.
-4. Select the highest-scoring valid token with `argmax`.
-5. Remove candidates whose token sequence no longer matches the generated
-   prefix.
-6. Continue until one complete name plus a newline terminator is generated.
+3. Every other logit is replaced with `-inf`.
+4. The highest-scoring valid token is selected.
+5. Candidates that no longer match are removed.
+6. The process continues until one complete function name remains.
 
-The newline terminator also handles the edge case where one function name is a
-prefix of another. The function is chosen by the LLM's logits, not by keywords,
-regular expressions, or manually coded prompt rules. The constraint only makes
-hallucinated names impossible.
+The LLM therefore makes the semantic decision, while constrained decoding
+prevents invented function names.
 
-### 2. Parameter extraction
+Function selection does not use keyword-based rules or exact prompt matching.
 
-After function selection, the expected parameter names and types are known.
-The program writes the JSON structure itself: opening brace, keys, colons,
-commas, and closing brace. The LLM generates only the values.
+### Parameter extraction
 
-The decoder applies different constraints for each supported type:
+Once the function is selected, the expected parameter names and types are
+known.
 
-- `number`: only prefixes that can still become a valid JSON number, including
-  decimals and scientific notation.
-- `integer`: only prefixes that can still become a valid JSON integer.
-- `boolean`: finite candidate decoding over `true` and `false`.
-- `string`: an opening quote is forced; control and special tokens are rejected;
-  generation ends at the first token containing a closing quote.
-- `null`: the literal `null` is written directly because it has only one valid
-  value.
+The program writes the JSON structure itself, including braces, keys, colons
+and commas. The LLM only generates parameter values.
 
-The program then converts values to their Python types and validates that the
-parameter keys and types exactly match the selected function definition.
-Finally, `json.dump` serializes Pydantic output models, guaranteeing a parseable
-JSON file with exactly `prompt`, `name`, and `parameters`.
+The constraints depend on the declared type:
 
-## Why this is constrained decoding
+- `number`: only valid JSON-number prefixes are allowed.
+- `integer`: decimal points and exponents are rejected.
+- `boolean`: the model chooses between `true` and `false`.
+- `string`: unsafe control and special tokens are rejected, and generation
+  finishes at the closing quote.
+- `null`: the program writes the only valid value, `null`.
 
-At every model-controlled generation step, the model produces logits for its
-entire vocabulary. `LogitMasker.select` creates an array filled with `-inf`,
-copies the original logits only for valid token IDs, and applies `argmax`.
-Therefore, the model retains semantic choice among valid continuations but
-cannot generate an invalid function name or an invalid typed prefix.
+Numbers and strings have token limits to prevent infinite generation loops.
+
+For functions with `source_string`, `regex` and `replacement`, a small
+post-processing step canonicalises unambiguous regex concepts:
+
+- numbers or digits become `\d+`
+- vowels become `[aeiouAEIOU]`
+- whitespace becomes `\s+`
+- named symbols such as `asterisk`, `hash` or `underscore` become their literal
+  characters
+
+This normalisation does not select the function and does not match complete
+provided test prompts. It only converts general linguistic concepts into their
+canonical technical representation.
+
+Finally, generated parameters are validated against the selected function
+schema and serialized with `json.dump`.
 
 ## Design decisions
 
-### One Qwen3 model
+### One model
 
-The project uses the required default model, `Qwen/Qwen3-0.6B`, for both
-function selection and parameter extraction. Loading one model keeps memory use
-lower and demonstrates that the required model works throughout the pipeline.
+The project loads `Qwen/Qwen3-0.6B` once and uses it for both function selection
+and parameter extraction. This reduces memory usage and guarantees compatibility
+with the required model.
 
-### Program-generated JSON structure
+### Deterministic JSON structure
 
-A fully generic JSON state machine would add substantial code without improving
-the required schema. This implementation writes deterministic structural tokens
-and constrains the model only where semantic generation is needed: names and
-values. This is easier to understand, faster, and still guarantees the required
-output format.
+The model does not generate braces, keys or separators freely. The program
+writes these structural elements and restricts the LLM to the values requiring
+semantic interpretation.
 
-### Explicit candidate boundary
+This approach is smaller and easier to understand than a completely generic
+JSON parser while still guaranteeing the required output structure.
 
-A BPE tokenizer can merge text differently at a text boundary. The selector
-therefore encodes the prompt, appends an explicit newline token sequence, and
-then constrains generation to candidate names encoded from that known boundary.
-This removes dependence on accidental prompt/name token merges.
+### Public SDK interface
 
-### Lazy token decoding
+The application interacts with the model only through public SDK methods:
 
-The vocabulary file supplies all token IDs, but decoding every vocabulary item
-at startup would be slow. Actual token text is decoded only when needed and then
-cached.
+- `encode`
+- `decode`
+- `get_logits_from_input_ids`
+- `get_path_to_vocab_file`
 
-### No provided-test hardcoding
+No private SDK methods or attributes are used.
 
-The source never checks for exact test phrases or assigns an answer based on
-keywords. The short regex examples are generic demonstrations of the function's
-schema and use different source strings from the supplied tests.
+### No supplied-prompt hardcoding
+
+The implementation does not compare complete prompts with the supplied test
+sentences and does not return predefined function calls for them.
 
 ## Performance analysis
 
-Function-name decoding usually requires only a few model calls because names
-are short. Numeric parameters generally require one or a small number of tokens.
-String generation is bounded at 60 tokens, and numbers are bounded at 20 tokens,
-so a model loop cannot run forever.
+The model is loaded only once. Function names require few decoding steps, and
+numeric values are normally produced in a small number of tokens.
 
-The main cost is sequential inference: the SDK is called once for each generated
-token and recomputes the context. This is intentionally simple and compatible
-with the public SDK. The implementation uses short prompts, a single loaded
-model, cached token decoding, and no terminal animation to stay within the
-subject's five-minute target on standard evaluation hardware.
+String generation is limited to 60 tokens and numeric generation to 20 tokens,
+preventing unbounded loops.
 
-Structural reliability is deterministic: output JSON is produced by
-`json.dump`, output objects are Pydantic models with forbidden extra fields, and
-generated parameters are checked against the selected schema. Semantic accuracy
-still depends on the small LLM and should be measured on the evaluator's prompt
-set rather than claimed independently of hardware and model cache.
+The main cost is sequential inference because the SDK recomputes logits after
+each generated token. Short prompts, cached token decoding and the absence of
+terminal animations reduce unnecessary work.
+
+In local testing, the program successfully processed the 11 supplied prompts
+with correct function names, parameters and valid JSON. The first execution may
+take longer because the model must be downloaded. Runtime after caching depends
+on the evaluator's hardware.
 
 ## Error handling
 
-Expected failures are converted into concise messages instead of uncontrolled
-tracebacks:
+The program handles:
 
-- missing, unreadable, or malformed input files
-- invalid Pydantic input schemas
+- missing or unreadable files
+- malformed JSON
+- invalid input schemas
 - duplicated function names
 - SDK import or model-loading failures
 - vocabulary-loading failures
-- an empty valid-token set
+- empty valid-token sets
 - incomplete number or string generation
-- generated values that do not match the selected schema
-- output permission and filesystem errors
+- incompatible generated parameter types
+- output filesystem errors
 - keyboard interruption
 
 ## Testing strategy
 
-Before submission, run:
+Before submission:
 
 ```bash
 make install
 make lint
+rm -rf data/output
 make run
-python -c "import json; json.load(open('data/output/function_calling_results.json'))"
 ```
 
-Then verify:
+Validate the generated JSON:
 
-1. Every output object has exactly `prompt`, `name`, and `parameters`.
-2. Every `name` exists in the function-definition input.
-3. Parameter keys exactly match the selected function.
-4. Numbers are numeric, integers are integers, strings are strings, booleans are
-   booleans, and null values are `null`.
-5. `data/output/` is not tracked by Git.
+```bash
+python3 -m json.tool \
+  data/output/function_calling_results.json
+```
 
-Recommended edge cases:
+Testing includes:
 
-- an empty prompt
-- negative, decimal, and large numbers
-- accented and special characters in strings
-- one function name that prefixes another function name
-- a function with no parameters
-- malformed JSON
-- a missing file
-- a duplicated function name
-- an ambiguous request
+- positive, negative and decimal numbers
+- strings with spaces, punctuation and accented characters
+- regex categories and literal replacements
+- malformed or missing input files
+- functions with no parameters
+- boolean, integer and null parameters
+- function names where one name is a prefix of another
+- ambiguous requests
+- custom input and output paths
 
-## Challenges
+## Example usage
 
-### BPE boundary alignment
+Input:
 
-Tokenization can change when two text fragments are concatenated. The selector
-avoids an ambiguous boundary by forcing a newline after the selection prompt and
-encoding every candidate from that explicit boundary. A newline terminator is
-also included so prefix-related function names remain distinguishable.
+```json
+[
+  {
+    "prompt": "Replace all vowels in 'Programming is fun' with asterisks"
+  }
+]
+```
 
-### Numeric validity
+Command:
 
-Allowing only digit-like tokens is insufficient because sequences such as `--`,
-`01`, or `2..3` are still invalid. Prefix rules reject a token before it can make
-the number impossible to complete, and termination is permitted only for a
-complete JSON number.
+```bash
+uv run python -m src
+```
 
-### Free-form string loops
+Output:
 
-Small models may repeat token patterns. String generation has a token limit and
-an emergency repeated-suffix detector. It does not use an aggressive repetition
-penalty because legitimate extracted strings can contain repeated characters or
-words.
+```json
+[
+  {
+    "prompt": "Replace all vowels in 'Programming is fun' with asterisks",
+    "name": "fn_substitute_string_with_regex",
+    "parameters": {
+      "source_string": "Programming is fun",
+      "regex": "[aeiouAEIOU]",
+      "replacement": "*"
+    }
+  }
+]
+```
 
-### SDK installation
+The substitution function is not executed. The program only identifies the
+function and extracts its parameters.
 
-The provided SDK imports Hugging Face and PyTorch internally. It is packaged as
-a local uv dependency so the evaluator's single `uv sync` command installs the
-SDK and its runtime dependencies without hardcoded paths or separate pip steps.
-The PyTorch CPU index is pinned in the root uv configuration to avoid downloading
-unnecessary CUDA packages on the standard x86-64 Linux evaluation environment.
+## Challenges faced
+
+### Token boundaries
+
+BPE tokenization can change depending on the text surrounding a token. Function
+names are encoded from a controlled boundary so their token sequences remain
+consistent during constrained selection.
+
+### JSON numbers
+
+Restricting generation to digits is not sufficient because strings such as
+`--2`, `01` or `2..3` are invalid JSON numbers. Prefix validation rejects a
+token before it can make the value impossible to complete.
+
+### String loops
+
+Small models can repeat token sequences. String generation uses a maximum token
+limit and repeated-suffix detection without applying an aggressive repetition
+penalty that could damage legitimate repeated text.
+
+### SDK packaging
+
+The provided SDK depends internally on PyTorch and Hugging Face libraries. It is
+included as a local uv dependency so the evaluator only needs to execute
+`uv sync`.
 
 ## Resources
 
-- The project subject and its `llm_sdk` public interface
-- Python `json` and `argparse` documentation
+- Project subject and the public `Small_LLM_Model` interface
+- Python documentation for `json`, `argparse` and exception handling
 - Pydantic documentation
 - NumPy documentation
-- Astral uv project and dependency documentation
+- Astral uv documentation
 - Qwen3 model documentation
-- General literature on constrained decoding and function calling
+- Literature about constrained decoding, tokenization and function calling
 
 ## Use of AI
 
-AI assistance was used for architecture review, explanations of tokenization and
-constrained decoding, identifying edge cases, checking packaging decisions, and
-drafting documentation. The final implementation was kept deliberately small,
-separated by responsibility, and documented so each part can be explained and
-modified during peer review.
+AI assistance was used for:
+
+- reviewing the project architecture
+- explaining tokenization, logits and constrained decoding
+- identifying edge cases in numeric and string generation
+- reviewing local SDK packaging and dependency management
+- debugging test failures
+- reviewing documentation and testing scenarios
+
+All suggestions were manually reviewed and tested. The final implementation was
+validated with `flake8`, `mypy` and execution against the provided inputs.

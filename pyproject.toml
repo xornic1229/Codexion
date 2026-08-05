@@ -18,16 +18,16 @@ dev = [
 
 [tool.uv]
 package = false
-cache-dir = ".uv-cache"
+
+# llm-sdk requires torch transitively. Restrict it to a stable version
+# and resolve it exclusively from PyTorch's CPU-only package index.
+constraint-dependencies = [
+    "torch==2.6.0",
+]
 
 [tool.uv.sources]
 llm-sdk = { path = "llm_sdk", editable = true }
 torch = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
-default = true
 
 [[tool.uv.index]]
 name = "pytorch-cpu"

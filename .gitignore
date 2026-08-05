@@ -28,4 +28,5 @@ data/output/
 Thumbs.db
 
 # Hugging Face cache, if created locally
-.huggingface/
+.huggingface/.cache/
+.tmp/

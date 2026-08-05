@@ -18,6 +18,7 @@ dev = [
 
 [tool.uv]
 package = false
+cache-dir = ".uv-cache"
 
 [tool.uv.sources]
 llm-sdk = { path = "llm_sdk", editable = true }

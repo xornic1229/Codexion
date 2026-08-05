@@ -1,11 +1,31 @@
+# Virtual environments
 .venv/
+venv/
+
+# uv local cache
+.uv-cache/
+
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Type checking and testing
 .mypy_cache/
 .pytest_cache/
-.ruff_cache/
-.DS_Store
+.coverage
+htmlcov/
+
+# Generated output
+data/output/
+
+# Editors
 .vscode/
 .idea/
-data/output/
-output/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Hugging Face cache, if created locally
+.huggingface/

@@ -1,55 +1,46 @@
-SHELL := /bin/sh
+NAME = codexion
 
-PROJECT_ROOT := $(CURDIR)
+CC = cc
+CFLAGS = -Wall -Wextra -Werror -pthread
 
-LOCAL_UV_CACHE := $(PROJECT_ROOT)/.uv-cache
-LOCAL_HF_HOME := $(PROJECT_ROOT)/.cache/huggingface
-LOCAL_TMP_DIR := $(PROJECT_ROOT)/.tmp
+INCLUDES = -I.
 
-export UV_CACHE_DIR := $(LOCAL_UV_CACHE)
-export HF_HOME := $(LOCAL_HF_HOME)
-export TMPDIR := $(LOCAL_TMP_DIR)
+SRCS = codexion.c \
+	src/parser.c \
+	src/utils.c \
+	src/init.c \
+	src/init_objects.c \
+	src/destroy.c \
+	src/time.c \
+	src/log.c \
+	src/coder_state.c \
+	src/request.c \
+	src/heap_order.c \
+	src/heap.c \
+	src/dongle.c \
+	src/dongle_release.c \
+	src/cycle.c \
+	src/routine.c \
+	src/monitor.c \
+	src/threads.c \
+	src/heap_sift.c 
 
-.PHONY: install run debug clean lint lint-strict prepare paths
+OBJS = $(SRCS:.c=.o)
 
-prepare:
-	@mkdir -p "$(LOCAL_UV_CACHE)"
-	@mkdir -p "$(LOCAL_HF_HOME)"
-	@mkdir -p "$(LOCAL_TMP_DIR)"
+all: $(NAME)
 
-install: prepare
-	uv sync
+$(NAME): $(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) -o $(NAME)
 
-run: prepare
-	uv run python -m src
-
-debug: prepare
-	PYTHONFAULTHANDLER=1 uv run python -X dev -m src
-
-lint: prepare
-	uv run flake8 src/
-	uv run mypy src/ --warn-return-any --warn-unused-ignores \
-		--ignore-missing-imports --disallow-untyped-defs \
-		--check-untyped-defs
-
-lint-strict: lint
-
-paths:
-	@echo "Project root:  $(PROJECT_ROOT)"
-	@echo "uv cache:     $(LOCAL_UV_CACHE)"
-	@echo "HF cache:     $(LOCAL_HF_HOME)"
-	@echo "Temporary:    $(LOCAL_TMP_DIR)"
-	@echo "Virtual env:  $(PROJECT_ROOT)/.venv"
+%.o: %.c codexion.h
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-	rm -rf .venv
-	rm -rf .uv-cache
-	rm -rf .cache
-	rm -rf .tmp
-	rm -rf data/output
-	rm -rf .mypy_cache
-	rm -rf .pytest_cache
-	find src llm_sdk -type d -name "__pycache__" \
-		-prune -exec rm -rf {} +
-	find src llm_sdk -type f \
-		\( -name "*.pyc" -o -name "*.pyo" \) -delete
+	rm -f $(OBJS)
+
+fclean: clean
+	rm -f $(NAME)
+
+re: fclean all
+
+.PHONY: all clean fclean re

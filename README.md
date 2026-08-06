@@ -1,384 +1,358 @@
-*This project has been created as part of the 42 curriculum by jaialons.*
+*Este proyecto ha sido creado como parte del currículo de 42 por jaialons.*
 
-# Call Me Maybe
+# Codexion
 
 ## Description
 
-Call Me Maybe translates natural-language requests into structured function
-calls.
+Codexion is a multithreaded simulation focused on resource sharing, scheduling and thread synchronization.
 
-Given a request such as:
+The goal of the project is to simulate a group of coders competing for a limited set of shared dongles. Each coder is represented by a thread and must acquire two dongles before being able to compile. After compiling, the coder releases both dongles, debugs, refactors, and then tries to compile again.
 
-```text
-What is the sum of 2 and 3?
-```
+The simulation ends when either one coder burns out or all coders complete the required number of compilations.
 
-the program does not calculate the result. It produces:
-
-```json
-{
-  "prompt": "What is the sum of 2 and 3?",
-  "name": "fn_add_numbers",
-  "parameters": {
-    "a": 2.0,
-    "b": 3.0
-  }
-}
-```
-
-The project uses the subject-provided `Small_LLM_Model` with the required
-`Qwen/Qwen3-0.6B` model.
-
-Function selection and parameter extraction use constrained decoding. At each
-generation step, invalid token logits are replaced with negative infinity, so
-the model can only choose continuations compatible with the available function
-names or the expected parameter type.
-
-## Requirements
-
-- Python 3.10 or later
-- `uv`
-- The included `llm_sdk`
-- Internet access on the first execution, unless the Qwen model is cached
-
-The application code uses Python's standard library, NumPy and Pydantic.
-PyTorch, Transformers and Hugging Face Hub are internal dependencies of the
-subject-provided SDK and are not imported directly by `src/`.
+This project explores typical concurrency problems such as mutual exclusion, deadlock prevention, starvation prevention, cooldown management, precise monitoring and thread-safe logging.
 
 ## Instructions
 
-Install all dependencies from the repository root:
+### Compilation
+
+Compile the project with:
 
 ```bash
-make install
+make
 ```
 
-This runs:
+Remove object files with:
 
 ```bash
-uv sync
-```
-
-Run the program with the default paths:
-
-```bash
-make run
-```
-
-Equivalent command:
-
-```bash
-uv run python -m src
-```
-
-Run with custom files:
-
-```bash
-uv run python -m src \
-  --functions_definition data/input/functions_definition.json \
-  --input data/input/function_calling_tests.json \
-  --output data/output/function_calling_results.json
-```
-
-Other available commands:
-
-```bash
-make debug
 make clean
-make lint
-make lint-strict
 ```
 
-The `data/output/` directory is generated during execution and must not be
-submitted.
-
-## Input and output
-
-The prompts file contains a JSON array:
-
-```json
-[
-  {
-    "prompt": "Greet shrek"
-  },
-  {
-    "prompt": "Reverse the string 'hello'"
-  }
-]
-```
-
-The function-definition file describes every available function, its
-description, parameter names and types, and return type.
-
-Both files are validated with Pydantic before loading the model. Missing files,
-malformed JSON, duplicated functions and invalid schemas produce readable error
-messages.
-
-The generated output contains exactly:
-
-- `prompt`: the original user request
-- `name`: the selected function name
-- `parameters`: the extracted typed arguments
-
-## Project structure
-
-```text
-src/
-├── __main__.py
-├── args_generator.py
-├── constrained.py
-├── errors.py
-├── function_selector.py
-├── llm.py
-├── loader.py
-├── models.py
-├── pipeline.py
-├── prompt_builder.py
-├── vocabulary.py
-└── writer.py
-
-llm_sdk/
-├── pyproject.toml
-└── llm_sdk/
-    └── __init__.py
-```
-
-## Algorithm explanation
-
-### Function selection
-
-The program builds a prompt containing all available function prototypes and
-descriptions.
-
-Each valid function name is tokenized. During generation:
-
-1. The LLM returns logits for the next token.
-2. The selector finds which tokens can continue at least one valid function
-   name.
-3. Every other logit is replaced with `-inf`.
-4. The highest-scoring valid token is selected.
-5. Candidates that no longer match are removed.
-6. The process continues until one complete function name remains.
-
-The LLM therefore makes the semantic decision, while constrained decoding
-prevents invented function names.
-
-Function selection does not use keyword-based rules or exact prompt matching.
-
-### Parameter extraction
-
-Once the function is selected, the expected parameter names and types are
-known.
-
-The program writes the JSON structure itself, including braces, keys, colons
-and commas. The LLM only generates parameter values.
-
-The constraints depend on the declared type:
-
-- `number`: only valid JSON-number prefixes are allowed.
-- `integer`: decimal points and exponents are rejected.
-- `boolean`: the model chooses between `true` and `false`.
-- `string`: unsafe control and special tokens are rejected, and generation
-  finishes at the closing quote.
-- `null`: the program writes the only valid value, `null`.
-
-Numbers and strings have token limits to prevent infinite generation loops.
-
-For functions with `source_string`, `regex` and `replacement`, a small
-post-processing step canonicalises unambiguous regex concepts:
-
-- numbers or digits become `\d+`
-- vowels become `[aeiouAEIOU]`
-- whitespace becomes `\s+`
-- named symbols such as `asterisk`, `hash` or `underscore` become their literal
-  characters
-
-This normalisation does not select the function and does not match complete
-provided test prompts. It only converts general linguistic concepts into their
-canonical technical representation.
-
-Finally, generated parameters are validated against the selected function
-schema and serialized with `json.dump`.
-
-## Design decisions
-
-### One model
-
-The project loads `Qwen/Qwen3-0.6B` once and uses it for both function selection
-and parameter extraction. This reduces memory usage and guarantees compatibility
-with the required model.
-
-### Deterministic JSON structure
-
-The model does not generate braces, keys or separators freely. The program
-writes these structural elements and restricts the LLM to the values requiring
-semantic interpretation.
-
-This approach is smaller and easier to understand than a completely generic
-JSON parser while still guaranteeing the required output structure.
-
-### Public SDK interface
-
-The application interacts with the model only through public SDK methods:
-
-- `encode`
-- `decode`
-- `get_logits_from_input_ids`
-- `get_path_to_vocab_file`
-
-No private SDK methods or attributes are used.
-
-### No supplied-prompt hardcoding
-
-The implementation does not compare complete prompts with the supplied test
-sentences and does not return predefined function calls for them.
-
-## Performance analysis
-
-The model is loaded only once. Function names require few decoding steps, and
-numeric values are normally produced in a small number of tokens.
-
-String generation is limited to 60 tokens and numeric generation to 20 tokens,
-preventing unbounded loops.
-
-The main cost is sequential inference because the SDK recomputes logits after
-each generated token. Short prompts, cached token decoding and the absence of
-terminal animations reduce unnecessary work.
-
-In local testing, the program successfully processed the 11 supplied prompts
-with correct function names, parameters and valid JSON. The first execution may
-take longer because the model must be downloaded. Runtime after caching depends
-on the evaluator's hardware.
-
-## Error handling
-
-The program handles:
-
-- missing or unreadable files
-- malformed JSON
-- invalid input schemas
-- duplicated function names
-- SDK import or model-loading failures
-- vocabulary-loading failures
-- empty valid-token sets
-- incomplete number or string generation
-- incompatible generated parameter types
-- output filesystem errors
-- keyboard interruption
-
-## Testing strategy
-
-Before submission:
+Remove object files and the executable with:
 
 ```bash
-make install
-make lint
-rm -rf data/output
-make run
+make fclean
 ```
 
-Validate the generated JSON:
+Rebuild the project with:
 
 ```bash
-python3 -m json.tool \
-  data/output/function_calling_results.json
+make re
 ```
 
-Testing includes:
+### Execution
 
-- positive, negative and decimal numbers
-- strings with spaces, punctuation and accented characters
-- regex categories and literal replacements
-- malformed or missing input files
-- functions with no parameters
-- boolean, integer and null parameters
-- function names where one name is a prefix of another
-- ambiguous requests
-- custom input and output paths
-
-## Example usage
-
-Input:
-
-```json
-[
-  {
-    "prompt": "Replace all vowels in 'Programming is fun' with asterisks"
-  }
-]
-```
-
-Command:
+The program is executed with eight arguments:
 
 ```bash
-uv run python -m src
+./codexion number_of_coders time_to_burnout time_to_compile time_to_debug time_to_refactor number_of_compiles_required dongle_cooldown scheduler
 ```
 
-Output:
+Example using FIFO scheduling:
 
-```json
-[
-  {
-    "prompt": "Replace all vowels in 'Programming is fun' with asterisks",
-    "name": "fn_substitute_string_with_regex",
-    "parameters": {
-      "source_string": "Programming is fun",
-      "regex": "[aeiouAEIOU]",
-      "replacement": "*"
-    }
-  }
-]
+```bash
+./codexion 5 800 100 100 100 3 50 fifo
 ```
 
-The substitution function is not executed. The program only identifies the
-function and extracts its parameters.
+Example using EDF scheduling:
 
-## Challenges faced
+```bash
+./codexion 5 800 100 100 100 3 50 edf
+```
 
-### Token boundaries
+The last argument must be one of:
 
-BPE tokenization can change depending on the text surrounding a token. Function
-names are encoded from a controlled boundary so their token sequences remain
-consistent during constrained selection.
+```txt
+fifo
+edf
+```
 
-### JSON numbers
+### Arguments
 
-Restricting generation to digits is not sufficient because strings such as
-`--2`, `01` or `2..3` are invalid JSON numbers. Prefix validation rejects a
-token before it can make the value impossible to complete.
+| Argument | Description |
+|---|---|
+| `number_of_coders` | Number of coder threads. |
+| `time_to_burnout` | Maximum time a coder can spend without starting a new compilation. |
+| `time_to_compile` | Time spent compiling. |
+| `time_to_debug` | Time spent debugging. |
+| `time_to_refactor` | Time spent refactoring. |
+| `number_of_compiles_required` | Number of compilations required for each coder. |
+| `dongle_cooldown` | Cooldown time before a released dongle can be reused. |
+| `scheduler` | Scheduling policy: `fifo` or `edf`. |
 
-### String loops
+### Error handling
 
-Small models can repeat token sequences. String generation uses a maximum token
-limit and repeated-suffix detection without applying an aggressive repetition
-penalty that could damage legitimate repeated text.
+Invalid arguments print:
 
-### SDK packaging
+```txt
+Error
+```
 
-The provided SDK depends internally on PyTorch and Hugging Face libraries. It is
-included as a local uv dependency so the evaluator only needs to execute
-`uv sync`.
+Invalid cases include:
+
+- wrong number of arguments;
+- negative numbers;
+- non-numeric values where numbers are expected;
+- invalid scheduler name;
+- zero coders;
+- zero or invalid burnout time;
+- zero required compilations.
+
+## Repository structure
+
+```txt
+.
+├── Makefile
+├── README.md
+├── codexion.c
+├── codexion.h
+└── src
+    ├── parser.c
+    ├── utils.c
+    ├── init.c
+    ├── init_objects.c
+    ├── destroy.c
+    ├── time.c
+    ├── log.c
+    ├── coder_state.c
+    ├── request.c
+    ├── heap_order.c
+    ├── heap.c
+    ├── dongle.c
+    ├── dongle_release.c
+    ├── cycle.c
+    ├── routine.c
+    ├── monitor.c
+    └── threads.c
+```
+
+## Scheduler
+
+Each dongle owns a request heap. When a coder wants to acquire a dongle, it creates a request and inserts it into the corresponding dongle heap.
+
+A dongle can only be granted when:
+
+- the dongle is available;
+- the dongle cooldown has expired;
+- the request is the highest-priority request in the heap.
+
+Two scheduling policies are supported: FIFO and EDF.
+
+### FIFO
+
+FIFO means First In, First Out.
+
+With this policy, the oldest request has the highest priority. The request with the earliest request timestamp is served first.
+
+### EDF
+
+EDF means Earliest Deadline First.
+
+With this policy, the request with the earliest deadline has the highest priority. The deadline is based on the coder state and the burnout limit, so coders closer to burning out are prioritized.
+
+## Blocking cases handled
+
+### Deadlock prevention
+
+The implementation reduces circular waiting by making coders acquire dongles in different orders depending on their identifier.
+
+Odd and even coders do not all request dongles in the same order. This avoids the classic deadlock pattern where every coder holds one dongle while waiting forever for another one.
+
+This directly addresses one of the Coffman conditions for deadlock: circular wait.
+
+### Starvation prevention
+
+Each dongle uses a heap of pending requests. A coder cannot take a dongle unless its request is the highest-priority request in that dongle heap.
+
+With FIFO, older requests are prioritized. This prevents newer requests from repeatedly overtaking older ones.
+
+With EDF, requests with the earliest deadline are prioritized. This helps coders that are closer to burnout obtain resources earlier.
+
+### Dongle cooldown management
+
+When a dongle is released, its release timestamp is stored.
+
+A future request can only acquire that dongle once the cooldown time has passed. This prevents immediate reuse of a dongle when `dongle_cooldown` is greater than zero.
+
+The cooldown check is protected by the dongle mutex, so the availability flag and release timestamp remain consistent.
+
+### One coder case
+
+If there is only one coder, there is only one dongle.
+
+Since compiling requires two dongles, the coder can acquire one dongle but can never acquire a second one. The monitor eventually detects burnout and stops the simulation.
+
+### Burnout while waiting
+
+A coder can burn out while waiting for the first dongle, while waiting for the second dongle, or while performing actions.
+
+The monitor thread continuously checks the elapsed time since each coder last started compiling. If this elapsed time reaches `time_to_burnout`, the monitor logs the burnout event and stops the simulation.
+
+### Precise burnout detection
+
+The monitor runs independently from coder threads. It regularly checks all coders and compares the current timestamp with each coder's last compile timestamp.
+
+The timestamp update is protected by the state mutex. This ensures that the monitor reads a consistent value and can detect burnout without racing against coder threads.
+
+### Log serialization
+
+All output is protected by a print mutex.
+
+This prevents messages from different threads from being printed at the same time or being mixed together in the terminal.
+
+## Thread synchronization mechanisms
+
+The project uses POSIX threads and mutexes.
+
+### `pthread_t`
+
+Each coder is represented by one `pthread_t`.
+
+The monitor is also represented by a separate `pthread_t`.
+
+This allows coders and the monitor to run concurrently.
+
+### `pthread_mutex_t` for dongles
+
+Each dongle has its own mutex.
+
+This mutex protects:
+
+- the dongle availability flag;
+- the dongle cooldown timestamp;
+- the dongle request heap.
+
+When a coder tries to take a dongle, it locks the dongle mutex, inserts or checks its request, verifies cooldown and availability, and only then takes the dongle if its request has priority.
+
+This prevents race conditions where two coders could take the same dongle at the same time.
+
+### `pthread_mutex_t` for simulation state
+
+The simulation has a state mutex.
+
+This mutex protects:
+
+- the global `finished` flag;
+- each coder compilation counter;
+- each coder last compile timestamp.
+
+Coder threads update their own state through this mutex. The monitor also reads coder state through this mutex.
+
+This creates thread-safe communication between coders and the monitor.
+
+Example: when a coder starts compiling, it updates `last_compile_time` while holding the state mutex. The monitor later reads this value while holding the same mutex, avoiding a data race.
+
+### `pthread_mutex_t` for logging
+
+The simulation has a print mutex.
+
+Before printing a log message, a thread locks the print mutex. After printing, it unlocks it.
+
+This guarantees that log lines are serialized and remain readable.
+
+### Communication between coders and monitor
+
+The monitor does not directly interrupt coder threads. Instead, it sets the shared `finished` flag when the simulation must stop.
+
+Coder threads regularly check this flag through a thread-safe function protected by the state mutex.
+
+This means coders can stop cleanly after the monitor detects burnout or after all required compilations are completed.
+
+### Custom scheduling mechanism
+
+The project implements a custom event-like mechanism using request heaps.
+
+A request represents a coder waiting for a dongle. Each dongle heap orders these requests according to the selected scheduling policy.
+
+The heap is always accessed while holding the dongle mutex, so request insertion, removal and priority checks are thread-safe.
 
 ## Resources
 
-- Project subject and the public `Small_LLM_Model` interface
-- Python documentation for `json`, `argparse` and exception handling
-- Pydantic documentation
-- NumPy documentation
-- Astral uv documentation
-- Qwen3 model documentation
-- Literature about constrained decoding, tokenization and function calling
+### Technical references
 
-## Use of AI
+- POSIX Threads documentation.
+- Linux manual pages for `pthread_create`, `pthread_join`, `pthread_mutex_init`, `pthread_mutex_lock`, `pthread_mutex_unlock` and `pthread_mutex_destroy`.
+- Linux manual pages for `gettimeofday` and `usleep`.
+- Valgrind Memcheck documentation.
+- Valgrind Helgrind documentation.
+- Operating systems material related to mutual exclusion, deadlocks, starvation and scheduling.
+- Classical scheduling concepts: FIFO and Earliest Deadline First.
 
-AI assistance was used for:
+### Artificial intelligence usage
 
-- reviewing the project architecture
-- explaining tokenization, logits and constrained decoding
-- identifying edge cases in numeric and string generation
-- reviewing local SDK packaging and dependency management
-- debugging test failures
-- reviewing documentation and testing scenarios
+Artificial intelligence was used as an assistant during the development process.
 
-All suggestions were manually reviewed and tested. The final implementation was
-validated with `flake8`, `mypy` and execution against the provided inputs.
+It was used for:
+
+- discussing the project architecture;
+- reviewing possible synchronization strategies;
+- helping split the code into smaller files;
+- checking whether the implementation respected the 42 Norm style constraints;
+- preparing test commands;
+- drafting explanations for the README.
+
+The final code decisions, testing, compilation, debugging and validation were performed by the project author.
+
+AI was not used as a replacement for understanding the synchronization model. The implementation was manually reviewed and tested with `make`, Valgrind Memcheck and Valgrind Helgrind.
+
+## Testing
+
+The project was tested with normal execution cases, burnout cases, invalid argument cases and thread-checking tools.
+
+### Normal execution
+
+```bash
+./codexion 5 800 100 100 100 3 50 fifo
+./codexion 5 800 100 100 100 3 50 edf
+```
+
+### Burnout case
+
+```bash
+./codexion 1 100 200 20 200 3 0 fifo
+```
+
+### Invalid arguments
+
+```bash
+./codexion
+./codexion 5 800 100 100 100 3 50
+./codexion 5 800 100 100 100 3 50 bad
+./codexion -5 800 100 100 100 3 50 fifo
+./codexion 5 abc 100 100 100 3 50 fifo
+./codexion 0 800 100 100 100 3 50 fifo
+```
+
+### Memory checking
+
+The project was checked with Valgrind Memcheck.
+
+Example command:
+
+```bash
+valgrind --leak-check=full --show-leak-kinds=all ./codexion 5 800 100 100 100 3 50 fifo
+```
+
+The tested output showed:
+
+```txt
+All heap blocks were freed -- no leaks are possible
+ERROR SUMMARY: 0 errors
+```
+
+### Thread checking
+
+The project was checked with Valgrind Helgrind using both FIFO and EDF scheduling modes.
+
+Example commands:
+
+```bash
+valgrind --tool=helgrind ./codexion 5 800 100 100 100 3 50 fifo
+valgrind --tool=helgrind ./codexion 5 800 100 100 100 3 50 edf
+```
+
+The tested output showed:
+
+```txt
+ERROR SUMMARY: 0 errors
+```
